@@ -69,12 +69,28 @@ def shap_global_explain(target_folder_path, full_spectrogram_folder_for_backgrou
             if shap_array.shape[0] == 3:
                 shap_array = np.transpose(shap_array, (1, 2, 0))
             # print(shap_array.shape)
-            # Compress colors to get the 2D map (positive evidence only)
-            importance_map = np.sum(np.abs(shap_array), axis=-1)
+
+            """Keeps only positive values, turns negative values to 0"""
+            # positive_shap = np.maximum(shap_array, 0)
+
+            """Keeps only negative values, turns positive values to 0 """
+            # negative_shap = np.minimum(shap_array, 0)          
+
+            # Compress colors to get the 2D map of importance (224, 224) by summing the values across the color channels
+            importance_map = np.sum(shap_array, axis=-1)
             # print(importance_map.shape)
             # Add this image's evidence to the master pile
             master_accumulator += importance_map
             processed_count += 1
+
+            """Export individual SHAP arrays"""
+            base_filename = os.path.splitext(os.path.basename(path))[0]
+            indiv_folder = os.path.join("output", "shap_individual", class_name_target)
+            os.makedirs(indiv_folder, exist_ok=True)
+            
+            # Save the 224x224 importance map as a .npy file for later analysis
+            np.save(os.path.join(indiv_folder, f"{base_filename}_raw_shap.npy"), importance_map)
+
 
             # Print progress so we know it hasn't frozen
             if processed_count % 10 == 0:
@@ -87,6 +103,12 @@ def shap_global_explain(target_folder_path, full_spectrogram_folder_for_backgrou
     if processed_count > 0:
         print("\nCalculating final SHAP averages...")
         master_trend_map = master_accumulator / processed_count
+
+        """Export the master trend map as a .npy file for later analysis"""
+        class_name = os.path.basename(target_folder_path)
+        os.makedirs("output/shap_global", exist_ok=True)
+        np.save(f"output/shap_global/Global_{class_name}_raw_data.npy", master_trend_map)
+        print(f"Saved raw global array to output/shap_global/Global_{class_name}_raw_data.npy")
 
         print("Checking original .wav files for exact Sample Rate and Average Duration...")
         total_duration = 0
@@ -136,11 +158,14 @@ def shap_global_explain(target_folder_path, full_spectrogram_folder_for_backgrou
         plt.imshow(master_trend_map, cmap='coolwarm', interpolation='nearest')
 
         # Apply the dynamic physics to the axes
+        # The Nyquist Frequency rule: the highest frequency a digital audio file can capture is exactly half of its Sample Rate.
         NYQUIST_FREQ = SAMPLE_RATE / 2 
         pixel_ticks = np.linspace(0, 224, 5)
         
         # Generate labels using the Average Duration
         time_labels = [f"{t:.1f}s" for t in np.linspace(0, AVG_DURATION, 5)]
+        # Generate exactly 5 evenly spaced numbers, starting at Nyquist frequency and ending at 0
+        # Because in our image matrix, row 0 corresponds to the Nyquist frequency (highest) and row 224 corresponds to 0 Hz (lowest)
         freq_labels = [f"{int(f)}" for f in np.linspace(NYQUIST_FREQ, 0, 5)]
         
         plt.xticks(pixel_ticks, time_labels, fontsize=10)
