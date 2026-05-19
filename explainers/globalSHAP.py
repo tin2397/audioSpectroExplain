@@ -23,11 +23,24 @@ def shap_global_explain(target_folder_path, full_spectrogram_folder_for_backgrou
     model = model.to(device)
     model.eval()
 
-    # --- SETUP DATA TRANSFORMS ---
+    # SETUP DATA TRANSFORMS 
+    # The 'preprocess' pipeline acts as a standard uniform for all incoming images.
     preprocess = transforms.Compose([
+        # ResNet50's first layer is physically wired for 224x224 inputs.
+        # This ensures every spectrogram—no matter its original size—is resized 
+        # to fit the model's perfectly.
         transforms.Resize((224, 224)),
+
+        # Converts NumPy images into a PyTorch Tensor.
+        # - Scales pixel values from integers (0 to 255) to decimals (0.0 to 1.0). (256 is the level of brightness in an 8-bit image)
+        # - Reorders dimensions from (Height, Width, Channels) to (Channels, Height, Width). 
         transforms.ToTensor(),
-        # These numbers are the standard PyTorch normalization math for ResNet
+
+        # Normalizes the image using ImageNet statistics.
+        # - The first list [0.485, 0.456, 0.406] is the Mean for Red, Green, and Blue.
+        # - The second list [0.229, 0.224, 0.225] is the Standard Deviation.
+        # This 'centers' the spectrogram data so that it matches the brightness 
+        # and contrast levels the model learned during its original training.
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
     # --- SETUP BACKGROUND DATA & EXPLAINER ---
